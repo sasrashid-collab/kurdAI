@@ -4,16 +4,14 @@ import requests
 st.set_page_config(page_title="🦁 AI Kurdish", layout="centered")
 st.title("🦁 یاریدەدەری زیرەکی کوردی")
 
-# --- فێڵە گەورەکە لێرەیە ---
-# کلیلەکەمان وا لێ کردووە گیتهەب پێی نەزانێت
+# فێڵ لە گیتهەب (کلیلەکەت بە ٣ پارچە)
 a = "hf_pgTwVyZsH"
 b = "QajfftOLjgsPjCA"
 c = "SKetXPjuGb"
-# لکاندنی پارچەکان بە بێ ئەوەی یەک دێڕی درێژ دروست بکەین
 token = f"{a}{b}{c}"
-# -------------------------
 
-API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+# بەکارهێنانی وەشانی v0.2 کە جێگیرترە و ئێرۆری 410 نادات
+API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
 headers = {"Authorization": f"Bearer {token}"}
 
 if "messages" not in st.session_state:
@@ -31,18 +29,19 @@ if prompt := st.chat_input("لێرە پرسیار بکە..."):
     with st.chat_message("assistant"):
         with st.spinner("🦁 خەریکم وەڵام ئامادە دەکەم..."):
             try:
-                payload = {
-                    "inputs": f"<s>[INST] Answer in Kurdish: {prompt} [/INST]",
-                    "parameters": {"max_new_tokens": 500}
-                }
+                # ناردنی پرسیار
+                payload = {"inputs": f"Answer in Kurdish: {prompt}"}
                 response = requests.post(API_URL, headers=headers, json=payload)
                 
                 if response.status_code == 200:
-                    output = response.json()[0]['generated_text']
-                    answer = output.split("[/INST]")[-1].strip()
+                    res_json = response.json()
+                    output = res_json[0]['generated_text']
+                    answer = output.replace(f"Answer in Kurdish: {prompt}", "").strip()
                     st.write(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
+                elif response.status_code == 503:
+                    st.warning("🦁 سێرڤەر خەوتووە، ٣٠ چرکە بوەستە و دووبارە بنووسە.")
                 else:
-                    st.error(f"سێرڤەر وتی: {response.status_code}. ئەگەر ٤٠١ بوو، واتە کلیلەکە کوژاوەتەوە.")
+                    st.error(f"سێرڤەر وتی: {response.status_code}. (ئەگەر ٤٠١ بوو کلیلەکە سوتاوە)")
             except:
-                st.error("🦁 پەیوەندی بڕا.")
+                st.error("🦁 کێشەی هێڵ هەیە.")

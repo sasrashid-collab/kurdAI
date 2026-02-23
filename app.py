@@ -1,17 +1,20 @@
 import streamlit as st
 import requests
 
+# 1. ڕێکخستنی لاپەڕە
 st.set_page_config(page_title="🦁 AI Kurdish", layout="centered")
-st.title("🦁 یاریدەدەری زیرەکی کوردی (DeepSeek)")
+st.title("🦁 یاریدەدەری زیرەکی کوردی")
 
-# هێنانی کلیلەکە لە سندوقی نهێنی (Secrets)
+# 2. وەرگرتنی کلیلەکە بە شێوەی پارێزراو
 try:
-    deepseek_key = st.secrets["DEEPSEEK_KEY"]
+    token = st.secrets["HF_TOKEN"]
 except:
-    st.error("⚠️ کلیلەکە لە Secrets نەدۆزرایەوە!")
+    st.error("❌ کلیلەکە لە Secrets نەدۆزرایەوە!")
     st.stop()
 
-API_URL = "https://api.deepseek.com/chat/completions"
+# 3. بەکارهێنانی مۆدێلی بەلاش و بەهێز
+API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
+headers = {"Authorization": f"Bearer {token}"}
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -20,34 +23,26 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-if prompt := st.chat_input("لێرە پرسیار بکە..."):
+if prompt := st.chat_input("لێرە شتێک بنووسە..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.write(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("🦁 DeepSeek بیر دەکەمەوە..."):
+        with st.spinner("🦁 چاوەڕوان بە..."):
             try:
-                headers = {
-                    "Authorization": f"Bearer {deepseek_key}",
-                    "Content-Type": "application/json"
+                payload = {
+                    "inputs": f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nAnswer in Kurdish: {prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                    "parameters": {"max_new_tokens": 500, "temperature": 0.7}
                 }
-                data = {
-                    "model": "deepseek-chat",
-                    "messages": [
-                        {"role": "system", "content": "You are a helpful assistant. Answer in Kurdish Sorani."},
-                        {"role": "user", "content": prompt}
-                    ]
-                }
-                response = requests.post(API_URL, headers=headers, json=data)
+                response = requests.post(API_URL, headers=headers, json=payload)
                 
                 if response.status_code == 200:
-                    answer = response.json()['choices'][0]['message']['content']
+                    output = response.json()[0]['generated_text']
+                    answer = output.split("assistant")[-1].strip()
                     st.write(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
-                elif response.status_code == 402:
-                    st.error("❌ باڵانسی ئەم کلیلە بەتاڵە (Credit Zero).")
                 else:
-                    st.error(f"⚠️ ئێرۆری سێرڤەر: {response.status_code}")
-            except Exception as e:
-                st.error(f"🦁 هەڵەیەک: {e}")
+                    st.error(f"⚠️ سێرڤەر کەمێک ماندووە، دووبارە هەوڵ بدەرەوە.")
+            except:
+                st.error("🦁 کێشەیەک ڕوویدا.")

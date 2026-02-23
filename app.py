@@ -1,62 +1,50 @@
 import streamlit as st
-import os
 from groq import Groq
-from openai import OpenAI
 from PIL import Image
 import io
+import base64
+import requests
 
-# دیزاینی لاپەڕە
+# ڕێکخستنی سەرەتایی سایتەکە
 st.set_page_config(page_title="🦁 Kurdish AI Assistant", layout="centered")
 st.title("🦁 یاریدەدەری زیرەکی کوردی")
-st.write("وێنەی پسوڵەکەت دابنێ یان چات لەگەڵ زیرەکی دەستکرد بکە")
 
 # وەرگرتنی کلیلەکان لە Secrets
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-XAI_API_KEY = st.secrets["XAI_API_KEY"]
+try:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+    XAI_API_KEY = st.secrets["XAI_API_KEY"]
+except:
+    st.error("⚠️ کلیلەکان لە بەشی Secrets نەدۆزرانەوە!")
+    st.stop()
 
-# ناساندنی مۆدێلەکان
+# ناساندنی کلاینتی Groq
 groq_client = Groq(api_key=GROQ_API_KEY)
-xai_client = OpenAI(api_key=XAI_API_KEY, base_url="https://api.x.ai/v1")
 
-tab1, tab2 = st.tabs(["📸 شیکارکردنی وێنە", "💬 چاتی Grok"])
+tab1, tab2 = st.tabs(["📸 شیکارکردنی وێنە (Groq)", "💬 چاتی Grok (xAI)"])
 
 with tab1:
-    st.header("شیکارکردنی پسوڵە و وێنە")
+    st.header("شیکارکردنی وێنە بە Llama 3.2")
     uploaded_file = st.file_uploader("وێنەیەک هەڵبژێرە...", type=["jpg", "jpeg", "png"])
     
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        st.image(image, caption='وێنە ئەپلۆدکراوەکە', use_container_width=True)
+        st.image(image, caption='وێنەکە ئامادەیە', use_container_width=True)
         
         if st.button("🔍 شیکار بکە"):
-            with st.spinner("خەریکە دەخوێنرێتەوە..."):
-                # گۆڕینی وێنە بۆ باینەری
+            with st.spinner("خەریکە Groq وێنەکە دەخوێنێتەوە..."):
                 buffered = io.BytesIO()
                 image.save(buffered, format="JPEG")
-                import base64
                 base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
-                # ناردن بۆ Groq Llama Vision
                 response = groq_client.chat.completions.create(
                     model="llama-3.2-11b-vision-preview",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "ئەم وێنەیە بە کوردی شیکار بکە و وردەکارییەکانی بنووسە"},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
-                                }
-                            ]
-                        }
-                    ]
+                    messages=[{"role": "user", "content": [{"type": "text", "text": "ئەم وێنەیە بە وردی بە کوردی شیکار بکە."}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]}]
                 )
-                st.success("ئەنجام:")
+                st.success("ئەنجامی Groq:")
                 st.write(response.choices[0].message.content)
 
 with tab2:
-    st.header("چات لەگەڵ مۆدێلی Grok")
+    st.header("چات لەگەڵ Grok")
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -64,16 +52,20 @@ with tab2:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("چی دەپرسی؟"):
+    if prompt := st.chat_input("لێرە پرسیار لە Grok بکە..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            response = xai_client.chat.completions.create(
-                model="grok-beta",
-                messages=st.session_state.messages
-            )
-            answer = response.choices[0].message.content
-            st.markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            # بانگکردنی Grok بە شێوەی ڕاستەوخۆ (بەبێ OpenAI library)
+            headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
+            payload = {"model": "grok-beta", "messages": st.session_state.messages}
+            
+            response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=payload)
+            if response.status_code == 200:
+                answer = response.json()['choices'][0]['message']['content']
+                st.markdown(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+            else:
+                st.error("کێشەیەک لە پەیوەندی بە Grok دروست بوو.")

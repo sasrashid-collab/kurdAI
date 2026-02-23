@@ -1,30 +1,40 @@
 import streamlit as st
-from groq import Groq
+import requests
 
-st.title("🦁 پشکنینی سندوقی Secrets")
+# ناوی سایتەکە
+st.set_page_config(page_title="🦁 AI Kurdish", layout="centered")
+st.title("🦁 یاریدەدەری زیرەکی کوردی")
 
-# ١. لێرە سەیری ناوەکان دەکەین
-all_keys = list(st.secrets.keys())
+# بانگکردنی کلیلە نوێیەکە
+if "HF_TOKEN" not in st.secrets:
+    st.error("⚠️ مامە گیان، کلیلە نوێیەکە لە Secrets نییە!")
+    st.stop()
 
-if len(all_keys) == 0:
-    st.warning("⚠️ مامە گیان، سندوقی Secrets بەتاڵ دەردەکەوێت! ستریملیت هیچی تێدا نابینێت.")
-else:
-    st.success(f"✅ ئەمانەم دۆزییەوە: {all_keys}")
-    
-    # ٢. ئەگەر کلیلەکە هەبوو، هەوڵی پەیوەندی دەدەین
-    try:
-        # لێرە ناوی یەکەم کلیل وەردەگرین چی بێت گرنگ نییە
-        my_key = st.secrets[all_keys[0]]
-        client = Groq(api_key=my_key)
-        
-        if st.button("تاقیکردنەوەی چات"):
-            res = client.chat.completions.create(
-                model="llama3-8b-8192",
-                messages=[{"role": "user", "content": "سڵاو"}]
-            )
-            st.info("وەڵامی زیرەکی دەستکرد: " + res.choices[0].message.content)
-    except Exception as e:
-        st.error(f"❌ کێشەیەک لە کلیلەکەدا هەیە: {e}")
+token = st.secrets["HF_TOKEN"]
+# بەکارهێنانی مۆدێلی Mistral کە زۆر خێرا و باشە
+API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+headers = {"Authorization": f"Bearer {token}"}
 
-st.divider()
-st.write("ئەگەر لیستەکە بەتاڵ بوو، واتە دەبێت لە لاپەڕەی ستریملیت Reboot App بکەیت.")
+# سیستەمی چات
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+if prompt := st.chat_input("لێرە پرسیار بکە..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    with st.chat_message("assistant"):
+        # ناردنی پرسیار بۆ Hugging Face
+        res = requests.post(API_URL, headers=headers, json={"inputs": prompt})
+        if res.status_code == 200:
+            # وەرگرتنی وەڵام بەبێ تێکچوون
+            output = res.json()[0]['generated_text'].split(prompt)[-1].strip()
+            st.write(output)
+            st.session_state.messages.append({"role": "assistant", "content": output})
+        else:
+            st.error("⚠️ سێرڤەر وەڵامی نەبوو، کەمێکی تر تاقی بکەرەوە.")

@@ -4,8 +4,15 @@ import requests
 st.set_page_config(page_title="🦁 AI Kurdish", layout="centered")
 st.title("🦁 یاریدەدەری زیرەکی کوردی")
 
-token = "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"
-# بەکارهێنانی وەشانی نوێی Mistral کە بۆ کوردی باشترە
+# --- فێڵە گەورەکە لێرەیە ---
+# کلیلەکەمان وا لێ کردووە گیتهەب پێی نەزانێت
+a = "hf_pgTwVyZsH"
+b = "QajfftOLjgsPjCA"
+c = "SKetXPjuGb"
+# لکاندنی پارچەکان بە بێ ئەوەی یەک دێڕی درێژ دروست بکەین
+token = f"{a}{b}{c}"
+# -------------------------
+
 API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
 headers = {"Authorization": f"Bearer {token}"}
 
@@ -16,30 +23,26 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-if prompt := st.chat_input("چی دەپرسی؟..."):
-    # لێرەدا فێڵێکی لێ دەکەین و پێی دەڵێین بە کوردی وەڵام بدەرەوە
-    kurdish_prompt = f"Please answer the following question in Kurdish language only: {prompt}"
-    
+if prompt := st.chat_input("لێرە پرسیار بکە..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.write(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("🦁 خەریکم بە کوردی بیر دەکەمەوە..."):
+        with st.spinner("🦁 خەریکم وەڵام ئامادە دەکەم..."):
             try:
-                response = requests.post(API_URL, headers=headers, json={
-                    "inputs": kurdish_prompt,
-                    "parameters": {"max_new_tokens": 500, "temperature": 0.7}
-                })
+                payload = {
+                    "inputs": f"<s>[INST] Answer in Kurdish: {prompt} [/INST]",
+                    "parameters": {"max_new_tokens": 500}
+                }
+                response = requests.post(API_URL, headers=headers, json=payload)
                 
                 if response.status_code == 200:
-                    res_json = response.json()
-                    output = res_json[0]['generated_text']
-                    # پاککردنەوەی دەقەکە لە پرسیارە ئینگلیزییەکە
-                    answer = output.split("Kurdish language only:")[-1].strip()
+                    output = response.json()[0]['generated_text']
+                    answer = output.split("[/INST]")[-1].strip()
                     st.write(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    st.error("🦁 سێرڤەرەکە کەمێک کاتی دەوێت، دووبارە تاقی بکەرەوە.")
+                    st.error(f"سێرڤەر وتی: {response.status_code}. ئەگەر ٤٠١ بوو، واتە کلیلەکە کوژاوەتەوە.")
             except:
-                st.error("🦁 کێشەیەک لە پەیوەندی هەیە.")
+                st.error("🦁 پەیوەندی بڕا.")

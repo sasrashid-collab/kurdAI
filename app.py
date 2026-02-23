@@ -1,89 +1,66 @@
 import streamlit as st
 from groq import Groq
 from PIL import Image
-import io
-import base64
-import requests
+import io, base64
 
-# دیزاینی سایتەکە
-st.set_page_config(page_title="🦁 Kurdish AI Assistant", layout="wide")
-st.title("🦁 یاریدەدەری زیرەکی کوردی")
-st.markdown("---")
+st.set_page_config(page_title="🦁 Kurdish AI & Coding", layout="wide")
+st.title("🦁 یاریدەدەری زیرەکی کوردی (وێنە + چات + کۆدینگ)")
 
-# بانگکردنی کلیلەکان لە Secrets (ئەوانەی ئێستا داتنان)
 try:
-    GROQ_KEY = st.secrets["GROQ_API_KEY"]
-    G_KEY = st.secrets["XAI_API_KEY"]
-except Exception as e:
-    st.error("⚠️ کێشەیەک لە کلیلەکاندا هەیە، تکایە دڵنیابە لە بەشی Secrets بە ڕاستی نووسیوتن.")
+    API_KEY = st.secrets["GROQ_API_KEY"]
+except:
+    st.error("⚠️ تکایە کلیلی GROQ_API_KEY لە بەشی Secrets دابنێ")
     st.stop()
 
-# دروستکردنی کلاینتی Groq
-groq_client = Groq(api_key=GROQ_KEY)
+client = Groq(api_key=API_KEY)
 
-# دروستکردنی دوو بەش (Tabs)
-tab1, tab2 = st.tabs(["📸 شیکارکردنی پسوڵە و وێنە", "💬 چات لەگەڵ Grok"])
+# دروستکردنی ٣ بەش
+tab1, tab2, tab3 = st.tabs(["📸 وێنە", "💬 چات", "💻 کۆدینگ"])
 
-# --- بەشی یەکەم: وێنە ---
+# بەشی وێنە (وەک پێشتر)
 with tab1:
-    st.header("پشکنینی وێنە")
-    img_file = st.file_uploader("وێنەی پسوڵە یان هەر شتێک ئەپلۆد بکە", type=["jpg", "png", "jpeg"])
-    
-    if img_file:
-        image = Image.open(img_file)
-        st.image(image, width=400)
-        
-        if st.button("🔍 شیکاری بکە"):
-            with st.spinner("خەریکە Groq وێنەکە دەخوێنێتەوە..."):
-                # ئامادەکردنی وێنەکە
-                buf = io.BytesIO()
-                image.save(buf, format="JPEG")
+    st.header("شیکاری وێنە")
+    file = st.file_uploader("وێنەیەک ئەپلۆد بکە", type=["jpg", "png", "jpeg"])
+    if file:
+        img = Image.open(file)
+        st.image(img, width=300)
+        if st.button("🔍 پشکنین"):
+            with st.spinner("..."):
+                buf = io.BytesIO(); img.save(buf, format="JPEG")
                 img_b64 = base64.b64encode(buf.getvalue()).decode()
-
-                # ناردنی بۆ مۆدێلی وێنەیی Groq
-                res = groq_client.chat.completions.create(
+                res = client.chat.completions.create(
                     model="llama-3.2-11b-vision-preview",
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "تکایە ئەم وێنەیە بە وردی بە زمانی کوردی شیکار بکە."},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
-                        ]
-                    }]
+                    messages=[{"role": "user", "content": [{"type": "text", "text": "ئەم وێنەیە شیکار بکە."}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
                 )
-                st.success("ئەنجام:")
                 st.write(res.choices[0].message.content)
 
-# --- بەشی دووەم: چات ---
+# بەشی چاتی گشتی
 with tab2:
-    st.header("چاتی زیرەکی کوردی (Grok)")
-    
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+    st.header("قسەکردنی ئاسایی")
+    if "m1" not in st.session_state: st.session_state.m1 = []
+    for m in st.session_state.m1:
+        with st.chat_message(m["role"]): st.write(m["content"])
+    if p := st.chat_input("چی دەپرسی؟", key="chat"):
+        st.session_state.m1.append({"role": "user", "content": p})
+        res = client.chat.completions.create(model="llama3-70b-8192", messages=st.session_state.m1)
+        ans = res.choices[0].message.content
+        st.session_state.m1.append({"role": "assistant", "content": ans})
+        st.rerun()
 
-    # پیشاندانی نامە کۆنەکان
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
-
-    # وەرگرتنی نامەی نوێ
-    user_input = st.chat_input("لێرە شتێک بنووسە...")
-    
-    if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.write(user_input)
-
-        with st.chat_message("assistant"):
-            # بانگکردنی Grok بە شێوەی ڕاستەوخۆ
-            h = {"Authorization": f"Bearer {G_KEY}", "Content-Type": "application/json"}
-            p = {"model": "grok-beta", "messages": st.session_state.chat_history}
-            
-            r = requests.post("https://api.x.ai/v1/chat/completions", headers=h, json=p)
-            
-            if r.status_code == 200:
-                reply = r.json()['choices'][0]['message']['content']
-                st.write(reply)
-                st.session_state.chat_history.append({"role": "assistant", "content": reply})
-            else:
-                st.error("کێشەیەک لە پەیوەندی بە Grok هەبوو. دڵنیابە کلیلەکەت ڕاستە.")
+# بەشی تایبەت بە کۆدینگ
+with tab3:
+    st.header("💻 پڕۆگرامسازی و کۆدینگ")
+    st.info("لێرە داوای هەر جۆرە کۆدێک بکە یان کۆدێک بنێرە بۆ چاککردن")
+    if "m2" not in st.session_state: st.session_state.m2 = []
+    for m in st.session_state.m2:
+        with st.chat_message(m["role"]): st.code(m["content"]) # کۆدەکان بە جوانی پیشان دەدات
+    if p_code := st.chat_input("کۆدەکەت لێرە داوا بکە...", key="coding"):
+        st.session_state.m2.append({"role": "user", "content": p_code})
+        # لێرە فەرمان بە AI دەکەین کە وەک پڕۆگرامسازێک جواب بداتەوە
+        res = client.chat.completions.create(
+            model="llama3-70b-8192",
+            messages=[{"role": "system", "content": "You are an expert programmer. Write clean code and explain it in Kurdish."}] + st.session_state.m2
+        )
+        ans = res.choices[0].message.content
+        st.session_state.m2.append({"role": "assistant", "content": ans})
+        st.rerun()

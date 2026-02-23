@@ -4,15 +4,15 @@ import requests
 st.set_page_config(page_title="🦁 AI Kurdish", layout="centered")
 st.title("🦁 یاریدەدەری زیرەکی کوردی")
 
-# هێنانی کلیلەکە لە سندوقی نهێنی ستریملیت
+# هێنانی کلیلەکە بە پیتە گەورەکان وەک ئەوەی لە Secrets دامانناوە
 try:
-    hf_token = st.secrets["MY_TOKEN"]
+    token = st.secrets["HF_TOKEN"]
 except:
-    st.error("❌ تکایە کلیلەکە لە بەشی Secrets دابنێ بە ناوی MY_TOKEN")
+    st.error("❌ کلیلەکە نەدۆزرایەوە! دڵنیابە لە Secrets بە ناوی HF_TOKEN نووسیوتە.")
     st.stop()
 
 API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-headers = {"Authorization": f"Bearer {hf_token}"}
+headers = {"Authorization": f"Bearer {token}"}
 
 if prompt := st.chat_input("لێرە شتێک بنووسە..."):
     with st.chat_message("user"):
@@ -20,14 +20,18 @@ if prompt := st.chat_input("لێرە شتێک بنووسە..."):
     
     with st.chat_message("assistant"):
         try:
+            # ناردنی داواکاری بۆ مۆدێلەکە
             response = requests.post(API_URL, headers=headers, json={"inputs": f"Answer in Kurdish: {prompt}"})
+            
             if response.status_code == 200:
                 res = response.json()
                 answer = res[0]['generated_text'] if isinstance(res, list) else res['generated_text']
-                st.write(answer.replace(f"Answer in Kurdish: {prompt}", "").strip())
+                # سڕینەوەی بەشی پرسیارەکە لە وەڵامەکەدا
+                final_answer = answer.replace(f"Answer in Kurdish: {prompt}", "").strip()
+                st.write(final_answer)
             elif response.status_code == 503:
-                st.info("🦁 مۆدێلەکە خەریکە گەرم دەبێت... کەمێکی تر دووبارە بنووسەوە.")
+                st.info("🦁 مۆدێلەکە خەریکە گەرم دەبێت... ٣٠ چرکە بوەستە و دووبارە بنووسەوە.")
             else:
-                st.error(f"⚠️ کێشەی سێرڤەر: {response.status_code}")
+                st.error(f"⚠️ ئێرۆری سێرڤەر: {response.status_code}")
         except:
-            st.error("🦁 پەیوەندی بڕا.")
+            st.error("🦁 کێشەیەک لە پەیوەندی هەیە.")

@@ -1,48 +1,33 @@
 import streamlit as st
 import requests
 
-# 1. ڕێکخستنی لاپەڕە
 st.set_page_config(page_title="🦁 AI Kurdish", layout="centered")
 st.title("🦁 یاریدەدەری زیرەکی کوردی")
 
-# 2. وەرگرتنی کلیلەکە بە شێوەی پارێزراو
+# هێنانی کلیلەکە لە سندوقی نهێنی ستریملیت
 try:
-    token = st.secrets["HF_TOKEN"]
+    hf_token = st.secrets["MY_TOKEN"]
 except:
-    st.error("❌ کلیلەکە لە Secrets نەدۆزرایەوە!")
+    st.error("❌ تکایە کلیلەکە لە بەشی Secrets دابنێ بە ناوی MY_TOKEN")
     st.stop()
 
-# 3. بەکارهێنانی مۆدێلی بەلاش و بەهێز
-API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
-headers = {"Authorization": f"Bearer {token}"}
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
+headers = {"Authorization": f"Bearer {hf_token}"}
 
 if prompt := st.chat_input("لێرە شتێک بنووسە..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.write(prompt)
-
+    
     with st.chat_message("assistant"):
-        with st.spinner("🦁 چاوەڕوان بە..."):
-            try:
-                payload = {
-                    "inputs": f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nAnswer in Kurdish: {prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
-                    "parameters": {"max_new_tokens": 500, "temperature": 0.7}
-                }
-                response = requests.post(API_URL, headers=headers, json=payload)
-                
-                if response.status_code == 200:
-                    output = response.json()[0]['generated_text']
-                    answer = output.split("assistant")[-1].strip()
-                    st.write(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                else:
-                    st.error(f"⚠️ سێرڤەر کەمێک ماندووە، دووبارە هەوڵ بدەرەوە.")
-            except:
-                st.error("🦁 کێشەیەک ڕوویدا.")
+        try:
+            response = requests.post(API_URL, headers=headers, json={"inputs": f"Answer in Kurdish: {prompt}"})
+            if response.status_code == 200:
+                res = response.json()
+                answer = res[0]['generated_text'] if isinstance(res, list) else res['generated_text']
+                st.write(answer.replace(f"Answer in Kurdish: {prompt}", "").strip())
+            elif response.status_code == 503:
+                st.info("🦁 مۆدێلەکە خەریکە گەرم دەبێت... کەمێکی تر دووبارە بنووسەوە.")
+            else:
+                st.error(f"⚠️ کێشەی سێرڤەر: {response.status_code}")
+        except:
+            st.error("🦁 پەیوەندی بڕا.")
